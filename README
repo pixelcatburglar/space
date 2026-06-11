@@ -1,0 +1,146 @@
+# SPACE — a very small EVE
+
+A tiny EVE Online homage in ~3,000 lines of C++ / Direct3D 11, now with
+multiplayer. No external dependencies, no asset files — every mesh, texture,
+starfield, nebula and the hangar backdrop is procedural.
+
+## Build
+
+Requires Visual Studio (Community is fine) with the C++ workload.
+
+```
+build.bat
+```
+
+Produces `space.exe` (the game) and `server.exe` (the multiplayer server).
+
+## Multiplayer quick start
+
+1. Run `server.exe` (TCP port 5577; accounts stored in `users.txt` next to it,
+   created automatically on first login).
+2. Run `space.exe` — log in at the title screen (pilot name + any password;
+   new names are registered on the spot). Friends on your LAN log in with
+   `space.exe server=<your-ip>` or by editing the SERVER field.
+3. Pilots in the same system appear in space (reddish hulls, name tags,
+   shield/armor bars) and on the overview as `PILOT` rows.
+4. **ENTER** opens the Local comms channel. Complain as tradition demands.
+5. Select a pilot (1–9/TAB) and press **F** to fire (8 km range, server
+   validates range/cooldown and rolls damage). Shields break, then armor;
+   at zero your victim explodes, gets towed to a station, and respawns
+   docked with a fresh hull.
+
+Press ESC at the login screen to play offline (everything else still works).
+
+## Sound
+
+All audio is synthesized at startup — no sound files shipped:
+
+- **Hangar music**: warm ambient pads (Am–F–C–G) with pentatonic bells while
+  docked or at the login screen.
+- **Space music**: a dark D-minor drone with slow chord colors and sparse
+  bells; the two tracks crossfade as you dock/undock.
+- **Engine hum**: loops under flight, pitching and swelling with throttle and
+  warp.
+- **SFX**: laser pew (range-attenuated for other pilots' fire), explosions,
+  warp/jump whoosh and zap, docking clunk, chat blip.
+
+**M** toggles mute. Run `space.exe dumpwav=1 shot=x.bmp frames=10` to export
+everything as .wav files (snd_*.wav, music_*.wav) if you want to audition or
+replace them.
+
+## The universe
+
+24 procedurally generated solar systems (deterministic seed — every client
+and the server agree). Security falls from a 0.9 high-sec core (*Aurelia*,
+your starting home) through low-sec to a rim of ~15 **0.0 nullsec** systems
+with EVE-style designations (`4X9-A3`, `VP-ZUY`, …). Each system rolls its
+own sun, nebula, planets, belts and stations (stations are rare in null);
+stargates form a connected graph (minimum spanning tree + shortcuts), and
+each gate physically sits on the side of the system facing its neighbor.
+
+## What you can do
+
+1. **Start docked** in Aurelia (shader-drawn hangar). Press **U** to undock.
+2. **Fly**: suns, planets, belts, stations, stargates.
+3. **Warp** in-system: select anything on the overview (**1–9** or **TAB**),
+   press **SPACE**.
+4. **Jump** between systems: fly within ~4 km of a stargate, press **J**.
+5. **Dock** at any station: within ~3 km, press **G**.
+6. **Navigate** with the star map (**N** or **F10**): systems colored by
+   security, gate links, sov tags, hover for details, click to plot a route
+   (shortest path highlighted on the map + next-gate readout in the HUD).
+7. **Claim nullsec**: park in a 0.0 system and type `/claim <YourAlliance>`
+   in chat. The server validates it, announces it to everyone, persists it
+   in `sov.txt`, and the system shows your tag on the map and HUD. Claims
+   can be stolen — last alliance to claim holds it.
+
+## Controls
+
+| Key | Action |
+| --- | --- |
+| W / S | throttle up / down |
+| A / D | yaw |
+| ↑ / ↓ | pitch |
+| Q / E | roll |
+| 1–9, TAB | select overview target (objects and pilots) |
+| SPACE | warp to selected target (aborts during align) |
+| F | fire on selected pilot (8 km range) |
+| ENTER | open chat / send message (`/claim`, `/help`) |
+| N / F10 | star map (click = plot route, ESC closes) |
+| M | mute / unmute audio |
+| J | jump stargate (within 4 km) |
+| G | dock at station (within 3 km) |
+| U | undock |
+| H | toggle help panel |
+| F12 | screenshot (`screenshot_N.bmp`) |
+| ESC | quit (cancels chat / login first) |
+
+## Self-test / screenshot harness
+
+The exe has a headless-ish test mode used during development:
+
+```
+space.exe shot=docked.bmp frames=120              # docked hangar
+space.exe shot=space.bmp  mode=space frames=150   # flying near the station
+space.exe shot=warp.bmp   mode=space warp=1 frames=560   # mid-warp
+space.exe shot=sys2.bmp   mode=gate jump=1 frames=320    # after gate jump
+
+# multiplayer test (server.exe must be running):
+space.exe shot=b.bmp user=bob   mode=space spawnoff=0.12 runsec=40
+space.exe shot=a.bmp user=alice mode=space fire=1 runsec=30 chatmsg=gf_bob chatframe=300
+
+# star map / sovereignty tests:
+space.exe shot=map.bmp frames=120 map=1 dest=17            # map open + route plotted
+space.exe shot=c.bmp user=x sys=null mode=gate chatmsg=/claim_GoonSwarm chatframe=120 frames=300
+```
+`sys=null` (or `sys=<idx>`) overrides the starting system; the generated
+universe is logged to space_log.txt at startup.
+
+It runs scripted frames (`frames=N` counts frames, `runsec=N` counts
+wall-clock seconds — use `runsec` for multiplayer tests since occluded
+windows render faster than 60 Hz), saves the backbuffer and exits.
+`user=` logs in automatically (password "pw"), `fire=1` shoots the first
+pilot it sees once a second, `chatmsg=`/`chatframe=` sends a chat line
+(underscores become spaces). Errors go to `space_log.txt`.
+
+## Code layout
+
+| File | Contents |
+| --- | --- |
+| `src/main.cpp` | window, game loop, input, state machine, HUD, login/chat UI |
+| `src/audio.h` | XAudio2 + procedural synthesis: music, SFX, engine hum |
+| `src/net.h` | client networking: connect, login, state sync, chat, combat events |
+| `src/server.cpp` | standalone server: accounts, relay, authoritative combat |
+| `src/game.h` | deterministic universe generator (24 systems), entities, game state |
+| `src/renderer.h` | D3D11 device, draw helpers, D2D/DWrite text, screenshots |
+| `src/shaders.h` | all HLSL: sky/stars/nebula/sun, lit objects, planets, warp tunnel, hangar |
+| `src/mesh.h` | procedural meshes: ship, station, stargate, planets, asteroids |
+| `src/math3d.h` | vectors/matrices (row-vector, left-handed, D3D style) |
+
+The wire protocol is human-readable, '\n'-terminated, '|'-separated lines
+over TCP (documented at the top of `src/server.cpp`). Ship state syncs at
+12 Hz with dead reckoning in between. The server is the authority on
+weapons: range (8 km), cooldown (0.9 s), damage rolls, and kills.
+
+Units are kilometers; the ship is a 120 m frigate, stations ~3 km, systems a
+few thousand km across (toy scale, not AU).
